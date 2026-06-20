@@ -6,6 +6,15 @@ def softmax(x, axis=-1) -> np.ndarray:
     e = np.exp(x - x.max(axis=axis, keepdims=True))
     return e / e.sum(axis=axis, keepdims=True)
 
+def quantize(x: np.ndarray):
+    absmax = np.max(np.abs(x))
+    scale = absmax / 127
+    q = np.round(x / scale)
+    return q, scale
+
+def dequantize(x: np.ndarray, scale: float):
+    return  x * scale
+
 def embedding(w, ids):
     wte = w['wte']
     wpe = w['wpe']
@@ -87,7 +96,9 @@ def gpt2_forward(w, ids) -> np.ndarray:
     
     x = layernorm(x, W['lnf_g'], W['lnf_b']) #(len, 768)
 
-    return x @ W["wte"].T #(len, 768) @ (768, 51284?)
+    dequantized_logits = dequantize(quantized_logits, logits_scale)
+    
+    return x @ dequantized_logits #(len, 768) @ (768, 51284?)
 
 def generate(prompt,token = 50, temperature = 1.0, top_k = 5):
     kv_cache = [None for _ in range(12)]
@@ -108,4 +119,5 @@ def generate(prompt,token = 50, temperature = 1.0, top_k = 5):
 
 enc = tiktoken.get_encoding('gpt2')
 W = np.load("gpt2_all.npz")
+quantized_logits, logits_scale = quantize(W["wte"].T)
 np.random.seed(0)

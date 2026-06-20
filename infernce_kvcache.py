@@ -6,6 +6,15 @@ def softmax(x, axis=-1) -> np.ndarray:
     e = np.exp(x - x.max(axis=axis, keepdims=True))
     return e / e.sum(axis=axis, keepdims=True)
 
+def quantize(x: np.ndarray, axis=None):
+    absmax = np.max(np.abs(x), axis=axis, keepdims=True)
+    scale = np.float32(absmax / 127)
+    q = np.round(x / scale).clip(-127, 127).astype(np.int8)
+    return q, scale
+
+def dequantize(x: np.ndarray, scale: float) -> np.ndarray:
+    return  (x * scale).astype(np.float32)
+
 def embedding(w, ids, index=0):
     wte = w['wte']
     wpe = w['wpe']
@@ -107,7 +116,13 @@ def gpt2_forward(w, ids, index) -> np.ndarray:
 
     x = layernorm(x, W['lnf_g'], W['lnf_b'])   # (len, 768)
 
-    return x[-1] @ W["wte"].T   # (768,) @ (768, 50257) = (50257,)
+    logit = x[-1] @ dequantized_logits #(len, 768) @ (768, 51284?)
+    logit_unquantized = x[-1] @ w['wte'].T
+
+    error = np.max(np.abs(logit - logit_unquantized))
+    print(error)
+
+    return logit
 
 def generate(prompt, token=30, temperature=1.0, top_k=5):
     global kv_cache
@@ -135,6 +150,9 @@ def generate(prompt, token=30, temperature=1.0, top_k=5):
 enc = tiktoken.get_encoding('gpt2')
 W = np.load("gpt2_all.npz")
 kv_cache: list = [None for _ in range(12)]
+quantized_logits, logits_scale = quantize(W["wte"].T, 0)
+dequantized_logits = dequantize(quantized_logits, logits_scale)
+
 np.random.seed(0)
 
 print(generate("Hello, my name is", token=30))
