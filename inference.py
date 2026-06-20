@@ -89,7 +89,8 @@ def gpt2_forward(w, ids) -> np.ndarray:
 
     return x @ W["wte"].T #(len, 768) @ (768, 51284?)
 
-def generate(prompt,token = 10, temperature = 1.0, top_k = 5):
+def generate(prompt,token = 50, temperature = 1.0, top_k = 5):
+    kv_cache = [None for _ in range(12)]
     ids = enc.encode(prompt)
 
     for _ in range(token):
@@ -108,6 +109,3 @@ def generate(prompt,token = 10, temperature = 1.0, top_k = 5):
 enc = tiktoken.get_encoding('gpt2')
 W = np.load("gpt2_all.npz")
 np.random.seed(0)
-
-
-print(generate('hello my name is '))
